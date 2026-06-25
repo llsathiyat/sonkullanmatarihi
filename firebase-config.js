@@ -1,8 +1,7 @@
 /* ═══════════════════════════════════════════════════════════
    ExpiryTrack — Firebase Bağlantı ve Senkronizasyon Katmanı
-   Bu dosya, localStorage'daki veriyi Firebase Realtime Database
-   ile otomatik olarak senkronize eder. app.js'in HİÇBİR
-   kısmını değiştirmeden çalışır.
+   localStorage'daki veriyi Firebase Realtime Database ile
+   otomatik senkronize eder. app.js'in kodunu değiştirmez.
 ═══════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -26,60 +25,56 @@
     console.warn('[Firebase] başlatma hatası:', e);
   }
 
-  // Senkronize edilecek anahtarlar (kullanıcı oturumu hariç hepsi)
   const SYNC_KEYS = ['et_users', 'et_products', 'et_stores', 'et_brands', 'et_settings', 'et_notes'];
 
-  // ── 1) AÇILIŞTA: Firebase'den veriyi çek, localStorage'a yaz ──
-  // GÜVENLİK: Bu Promise HER ZAMAN sonuçlanır — en kötü ihtimalle
-  // 8 saniye sonra zorla resolve edilir, sonsuza dek askıda kalamaz.
-  function fetchFromFirebase() {
+  // ── Her anahtarı KENDİ SÜRESİNCE bekle, birbirini engellemesin ──
+  // Küçük veriler (users, stores, brands) hızlı gelir.
+  // Büyük veri (products, görseller içerebilir) için daha uzun süre tanınır.
+  // Önemli: HER anahtar için ayrı zaman aşımı var, biri yavaşsa diğerlerini geciktirmez.
+  function fetchKey(key, timeoutMs) {
     return new Promise((resolve) => {
-      if (!firebaseOk) { resolve(false); return; }
+      let done = false;
+      const finish = (got) => { if (!done) { done = true; resolve(got); } };
 
-      let pending   = SYNC_KEYS.length;
-      let gotAny    = false;
-      let settled   = false;
+      if (!firebaseOk) { finish(false); return; }
 
-      function finishOnce(result) {
-        if (settled) return;
-        settled = true;
-        resolve(result);
-      }
+      dbRef.ref(key).once('value')
+        .then((snap) => {
+          const val = snap.val();
+          if (val !== null && val !== undefined) {
+            localStorage.setItem(key, JSON.stringify(val));
+            finish(true);
+          } else {
+            finish(false);
+          }
+        })
+        .catch((err) => { console.warn('[Firebase] okuma hatası:', key, err); finish(false); });
 
-      SYNC_KEYS.forEach((key) => {
-        dbRef.ref(key).once('value')
-          .then((snap) => {
-            const val = snap.val();
-            if (val !== null && val !== undefined) {
-              localStorage.setItem(key, JSON.stringify(val));
-              gotAny = true;
-            }
-          })
-          .catch((err) => console.warn('[Firebase] okuma hatası:', key, err))
-          .finally(() => {
-            pending--;
-            if (pending === 0) finishOnce(gotAny);
-          });
-      });
-
-      // Kesin garanti: 8 saniye sonra ne olursa olsun devam et
-      setTimeout(() => finishOnce(gotAny), 8000);
+      setTimeout(() => finish(false), timeoutMs);
     });
   }
 
-  window.__firebaseReady = fetchFromFirebase();
+  // ── AÇILIŞTA: tüm anahtarları paralel çek, hepsi bitince devam et ──
+  window.__firebaseReady = Promise.all([
+    fetchKey('et_users',    10000),
+    fetchKey('et_products', 25000),   // en büyük veri, en uzun süre
+    fetchKey('et_stores',   10000),
+    fetchKey('et_brands',   10000),
+    fetchKey('et_settings', 10000),
+    fetchKey('et_notes',    15000),
+  ]).then((results) => results.some(Boolean));
 
-  // EKSTRA GÜVENLİK AĞI: Promise her nasılsa askıda kalırsa,
-  // 10 saniye sonra yükleme ekranını zorla kaldır.
+  // EKSTRA GÜVENLİK AĞI: Her ihtimale karşı 27 saniye sonra yükleme
+  // ekranını zorla kaldır (Promise.all bile askıda kalırsa).
   setTimeout(() => {
     const overlay = document.getElementById('firebaseLoadingOverlay');
     if (overlay) {
-      console.warn('[Firebase] Zaman aşımı güvenliği devreye girdi, ekran zorla kaldırılıyor.');
+      console.warn('[Firebase] Zaman aşımı güvenliği devreye girdi.');
       overlay.remove();
     }
-  }, 10000);
+  }, 27000);
 
-  // ── 2) localStorage.setItem'i ele geçir: her yazımda Firebase'e de gönder ──
+  // ── localStorage.setItem'i ele geçir: her yazımda Firebase'e de gönder ──
   const originalSetItem = localStorage.setItem.bind(localStorage);
   localStorage.setItem = function (key, value) {
     originalSetItem(key, value);

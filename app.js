@@ -210,8 +210,8 @@ function init() {
     if (overlay) overlay.remove();
   };
 
-  // Ne olursa olsun 9 saniye sonra uygulamayı başlat (kesin garanti)
-  setTimeout(start, 9000);
+  // Ne olursa olsun 28 saniye sonra uygulamayı başlat (kesin garanti)
+  setTimeout(start, 28000);
 
   try {
     if (window.__firebaseReady && typeof window.__firebaseReady.then === 'function') {
