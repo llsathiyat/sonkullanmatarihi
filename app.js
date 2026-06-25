@@ -196,12 +196,19 @@ $('themeToggle').addEventListener('click', () => {
 // INIT
 // ════════════════════════════════════════
 function init() {
-  seedDefaults();
-  applyTheme(db.get(K.theme, 'light'));
-  applySettings();
-  const sess = sessionStorage.getItem('et_session');
-  if (sess) { try { SESSION = JSON.parse(sess); showApp(); } catch { showLogin(); } }
-  else showLogin();
+  const start = () => {
+    seedDefaults();
+    applyTheme(db.get(K.theme, 'light'));
+    applySettings();
+    const sess = sessionStorage.getItem('et_session');
+    if (sess) { try { SESSION = JSON.parse(sess); showApp(); } catch { showLogin(); } }
+    else showLogin();
+  };
+  if (window.__firebaseReady) {
+    window.__firebaseReady.then(start).catch(start);
+  } else {
+    start();
+  }
 }
 
 function seedDefaults() {
