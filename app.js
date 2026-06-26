@@ -304,15 +304,18 @@ function init() {
     else showLogin();
     const overlay = $('firebaseLoadingOverlay');
     if (overlay) overlay.remove();
-    // Veri hazır — giriş butonunu aktif et
+    // Veri hazır — giriş butonunu aktif et ve görsel olarak belirginleştir
     const loginBtn = $('loginBtn');
-    if (loginBtn) loginBtn.disabled = false;
+    if (loginBtn) {
+      loginBtn.disabled = false;
+      loginBtn.classList.add('ready');
+    }
     const waitMsg = $('loginWaitMsg');
     if (waitMsg) waitMsg.style.display = 'none';
   };
 
-  // Ne olursa olsun 9 saniye sonra uygulamayı başlat (kesin garanti)
-  setTimeout(start, 9000);
+  // Ne olursa olsun 7 saniye sonra uygulamayı başlat (kesin garanti)
+  setTimeout(start, 7000);
 
   try {
     // SADECE kullanıcı verisini bekle — büyük veriler arka planda gelir
@@ -1560,3 +1563,19 @@ init();
 // Göç işlemi tek seferlik tamamlandı (görseller zaten ImgBB linkleri).
 // Her açılışta tüm ürünleri taramak gereksiz yere zaman/CPU harcıyordu.
 // Gerekirse Console'dan elle çalıştırılabilir: migrateBase64ImagesToImgBB()
+
+// SON ÇARE GÜVENLİK AĞI: Her ihtimale karşı, 8 saniye sonra giriş
+// butonu hâlâ kilitliyse zorla aç. Hiçbir koşulda kullanıcı sonsuza
+// dek "Giriş Yap" butonuna basamadan kalmasın.
+setTimeout(() => {
+  const btn = $('loginBtn');
+  if (btn && btn.disabled) {
+    console.warn('[Güvenlik Ağı] Giriş butonu zorla aktif edildi.');
+    btn.disabled = false;
+    btn.classList.add('ready');
+    const waitMsg = $('loginWaitMsg');
+    if (waitMsg) waitMsg.style.display = 'none';
+    const overlay = $('firebaseLoadingOverlay');
+    if (overlay) overlay.remove();
+  }
+}, 8000);
