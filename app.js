@@ -260,13 +260,31 @@ function init() {
 }
 
 function seedDefaults() {
-  const users = db.get(K.users);
-  if (!users.find(u => u.username === 'admin'))
-    users.unshift({ id: 'admin', username: 'admin', password: 'admin123', role: 'admin', storeId: null });
-  if (!users.find(u => u.username === 'kullanici')) {
-    const stores = db.get(K.stores);
-    users.push({ id: uid(), username: 'kullanici', password: 'user123', role: 'user', storeId: stores[0]?.id || null });
+  let users = db.get(K.users);
+
+  // Eski varsayılan hesapları kaldır (admin, kullanici) — sadece bir kez çalışır
+  const hadOldDefaults = users.some(u => u.username === 'admin' || u.username === 'kullanici');
+  if (hadOldDefaults) {
+    users = users.filter(u => u.username !== 'admin' && u.username !== 'kullanici');
   }
+
+  // Yeni 8 admin kullanıcıyı, eğer hiç biri yoksa ekle
+  const NEW_ADMINS = [
+    { username: 'ibrahim', password: '@Jio7oQ*p4o9' },
+    { username: 'selim',   password: 'pZ@&@bYe4G6q' },
+    { username: 'ali',     password: 'BF155qW@Kbkt' },
+    { username: 'yusuf',   password: '!dofI0rzfb6d' },
+    { username: 'mevlut',  password: 'XdR8Fh4sR#Yn' },
+    { username: 'ahmet',   password: 'p$XZcu$S0D6%' },
+    { username: 'behsat',  password: 'IvmS8IE#N7uR' },
+    { username: 'zehra',   password: 'Dj6!Zj@RP1wf' },
+  ];
+  NEW_ADMINS.forEach(({ username, password }) => {
+    if (!users.find(u => u.username === username)) {
+      users.push({ id: uid(), username, password, role: 'admin', storeId: null });
+    }
+  });
+
   db.set(K.users, users);
   if (!localStorage.getItem(K.stores))   db.set(K.stores, []);
   if (!localStorage.getItem(K.brands))   db.set(K.brands, []);
