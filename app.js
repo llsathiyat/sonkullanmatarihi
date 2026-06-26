@@ -32,6 +32,8 @@ const $      = id => document.getElementById(id);
 const esc    = s  => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const uid    = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
 const isAdmin= () => SESSION?.role === 'admin';
+const isViewer = () => SESSION?.role === 'viewer';
+const canEdit  = () => isAdmin(); // viewer ve user düzenleyemez
 
 // ── IMAGE UPLOAD ──
 const IMGBB_API_KEY = 'c72ac2bc01eecd15e895836bd1efec90';
@@ -285,6 +287,23 @@ function seedDefaults() {
     }
   });
 
+  // Yeni 8 viewer (gözlemci) kullanıcı — sadece görüntüleme, hiçbir şey ekleyip silemez
+  const NEW_VIEWERS = [
+    { username: 'levent',  password: 'Z*JjK7Bfe5uU' },
+    { username: 'emrah',   password: 'Xtsh9ur5C&$X' },
+    { username: 'mehmet',  password: 'r43&EWAmllng' },
+    { username: 'ruzgar',  password: '$1RFS3x%J26O' },
+    { username: 'tamer',   password: 'ju%UAtZ8EdT!' },
+    { username: 'erhan',   password: '4sWSYYu*kqG!' },
+    { username: 'kazim',   password: 'evtY1HB#9K*l' },
+    { username: 'behiye',  password: 'A2fMsWJY&YCO' },
+  ];
+  NEW_VIEWERS.forEach(({ username, password }) => {
+    if (!users.find(u => u.username === username)) {
+      users.push({ id: uid(), username, password, role: 'viewer', storeId: null });
+    }
+  });
+
   db.set(K.users, users);
   if (!localStorage.getItem(K.stores))   db.set(K.stores, []);
   if (!localStorage.getItem(K.brands))   db.set(K.brands, []);
@@ -474,8 +493,12 @@ $('clearNotifsBtn')?.addEventListener('click', e => {
 function buildSidebar() {
   $('sidebarUsername').textContent = SESSION.username;
   const roleTag = $('sidebarRoleTag');
-  roleTag.textContent = isAdmin() ? t('roleAdmin') : t('roleUser');
+  roleTag.textContent = isAdmin() ? t('roleAdmin') : isViewer() ? 'Gözlemci' : t('roleUser');
   roleTag.className   = 'user-role-tag ' + SESSION.role;
+
+  // Viewer rolü "Ürün Ekle" linkini göremez
+  const addProductLink = document.querySelector('.nav-item[data-page="addProduct"]');
+  if (addProductLink) addProductLink.classList.toggle('hidden', isViewer());
 
   const nav = $('sidebarNav');
   nav.querySelectorAll('.admin-nav').forEach(el => el.remove());
@@ -519,10 +542,12 @@ const PAGE_TITLES = {
   settings:     t('pageSettings'),
   productNotes: 'Ürün Notları',
 };
-const ADMIN_PAGES = ['stores', 'brands', 'users', 'settings', 'productNotes'];
+const ADMIN_PAGES  = ['stores', 'brands', 'users', 'settings', 'productNotes'];
+const EDITOR_PAGES = ['addProduct']; // viewer bu sayfalara giremez
 
 function navigateTo(pageId) {
   if (ADMIN_PAGES.includes(pageId) && !isAdmin()) { toast(t('accessDenied'), 'error'); return; }
+  if (EDITOR_PAGES.includes(pageId) && isViewer()) { toast(t('accessDenied'), 'error'); return; }
   document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.page === pageId));
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === `page-${pageId}`));
   $('pageTitle').textContent = PAGE_TITLES[pageId] || pageId;
@@ -563,7 +588,7 @@ sidebarOverlay.addEventListener('click', closeMobileSidebar);
 // ════════════════════════════════════════
 function visibleProducts() {
   const all = db.get(K.products);
-  return isAdmin() ? all : all.filter(p => p.storeId === SESSION.storeId);
+  return (isAdmin() || isViewer()) ? all : all.filter(p => p.storeId === SESSION.storeId);
 }
 
 function getCatName(id)   { return CATEGORIES.find(c => c.id === id)?.name || id; }
@@ -720,6 +745,7 @@ function populateBrandSelect(selId, catId = '', selected = '') {
 
 $('addProductForm').addEventListener('submit', e => {
   e.preventDefault();
+  if (!canEdit()) { toast(t('accessDenied'), 'error'); return; }
   clrErr('pNameErr','pStoreErr','pCatErr','pBrandErr','pQtyErr','pExpiryErr');
   const f = {
     name:       $('pName').value.trim(),
@@ -812,8 +838,8 @@ function renderProductList() {
               <td><span class="status-badge ${s.cls}"><i class="fas ${s.icon}"></i>${s.label}</span></td>
               <td><div class="row-actions">
                 ${p.note ? `<button class="action-btn note-toggle" onclick="toggleProdNote('${noteId}')" title="Notu Göster"><i class="fas fa-note-sticky"></i></button>` : ''}
-                <button class="action-btn edit"   onclick="openEditProduct('${p.id}')" title="Düzenle"><i class="fas fa-pen"></i></button>
-                <button class="action-btn delete" onclick="openDeleteItem('product','${p.id}','${esc(p.name)}')" title="Sil"><i class="fas fa-trash"></i></button>
+                ${canEdit() ? `<button class="action-btn edit"   onclick="openEditProduct('${p.id}')" title="Düzenle"><i class="fas fa-pen"></i></button>` : ''}
+                ${canEdit() ? `<button class="action-btn delete" onclick="openDeleteItem('product','${p.id}','${esc(p.name)}')" title="Sil"><i class="fas fa-trash"></i></button>` : ''}
               </div></td>
             </tr>
             ${p.note ? `<tr class="prod-note-row" id="${noteId}" style="display:none">
@@ -857,6 +883,7 @@ window.toggleProdNote = function(rowId) {
 
 // ── EDIT PRODUCT ──
 window.openEditProduct = function(id) {
+  if (!canEdit()) { toast(t('accessDenied'), 'error'); return; }
   const p = db.get(K.products).find(x => x.id === id); if (!p) return;
   $('editProdId').value      = p.id;
   $('editProdName').value    = p.name;
@@ -881,6 +908,7 @@ window.openEditProduct = function(id) {
 
 $('editProductForm').addEventListener('submit', e => {
   e.preventDefault();
+  if (!canEdit()) { toast(t('accessDenied'), 'error'); return; }
   const id   = $('editProdId').value;
   const name = $('editProdName').value.trim();
   if (!name || !$('editProdStore').value || !$('editProdCat').value || !$('editProdBrand').value || !$('editProdQty').value || !$('editProdExpiry').value) {
@@ -1177,11 +1205,12 @@ function renderUsers() {
   if (!users.length) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
   tbody.innerHTML = users.map(u => {
-    const storeName = u.storeId ? getStoreName(u.storeId) : (u.role === 'admin' ? '—' : t('noData'));
+    const storeName = u.storeId ? getStoreName(u.storeId) : ((u.role === 'admin' || u.role === 'viewer') ? '—' : t('noData'));
     const isSelf    = u.username === SESSION.username;
+    const roleLabel = u.role === 'admin' ? t('roleAdmin') : u.role === 'viewer' ? 'Gözlemci' : t('roleUser');
     return `<tr>
       <td><strong>${esc(u.username)}</strong></td>
-      <td><span class="role-badge ${u.role}">${u.role==='admin' ? t('roleAdmin') : t('roleUser')}</span></td>
+      <td><span class="role-badge ${u.role}">${roleLabel}</span></td>
       <td>${esc(storeName)}</td>
       <td><div class="row-actions">
         <button class="action-btn edit" onclick="openEditUser('${u.id}')" title="Düzenle"><i class="fas fa-pen"></i></button>
@@ -1207,13 +1236,13 @@ window.openEditUser = function(id) {
   $('uPassword').value= u.password;
   $('uRole').value    = u.role;
   populateStoreSelect('uStore', u.storeId || '');
-  $('uStoreGroup').style.display = u.role === 'admin' ? 'none' : '';
+  $('uStoreGroup').style.display = (u.role === 'admin' || u.role === 'viewer') ? 'none' : '';
   $('userModalTitle').textContent = t('editUserTitle');
   openModal('userModal');
 };
 
 $('uRole')?.addEventListener('change', function() {
-  $('uStoreGroup').style.display = this.value === 'admin' ? 'none' : '';
+  $('uStoreGroup').style.display = (this.value === 'admin' || this.value === 'viewer') ? 'none' : '';
 });
 
 $('userForm').addEventListener('submit', e => {
@@ -1232,7 +1261,7 @@ $('userForm').addEventListener('submit', e => {
 
   const users = db.get(K.users);
   if (!id && users.find(u => u.username === uname)) { setErr('uUsernameErr', t('userNameExists')); return; }
-  const data = { username: uname, password: pass, role, storeId: role === 'admin' ? null : storeId };
+  const data = { username: uname, password: pass, role, storeId: (role === 'admin' || role === 'viewer') ? null : storeId };
   if (id) { const idx = users.findIndex(u => u.id === id); users[idx] = { ...users[idx], ...data }; db.set(K.users, users); toast(t('userEditSuccess', uname)); }
   else    { users.push({ id: uid(), ...data }); db.set(K.users, users); toast(t('userAddSuccess', uname)); }
   closeModal('userModal'); renderUsers();
@@ -1244,6 +1273,7 @@ $('userForm').addEventListener('submit', e => {
 let pendingDelete = null;
 
 window.openDeleteItem = function(type, id, name) {
+  if (!canEdit()) { toast(t('accessDenied'), 'error'); return; }
   pendingDelete = { type, id };
   const titles = { product:'deleteProductTitle', store:'deleteStoreTitle', brand:'deleteBrandTitle', user:'deleteUserTitle' };
   const texts  = { product: t('deleteConfirmText',name), store: t('deleteStoreConfirm',name), brand: t('deleteBrandConfirm',name), user: t('deleteUserConfirm',name) };
@@ -1253,6 +1283,7 @@ window.openDeleteItem = function(type, id, name) {
 };
 
 $('deleteConfirmBtn').addEventListener('click', () => {
+  if (!canEdit()) { toast(t('accessDenied'), 'error'); closeModal('deleteModal'); return; }
   if (!pendingDelete) return;
   const { type, id } = pendingDelete;
   if (type === 'product') {

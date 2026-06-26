@@ -113,6 +113,7 @@ ul{list-style:none}
 .user-role-tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;margin-top:2px}
 .user-role-tag.admin{background:linear-gradient(135deg,#fef3c7,#fde68a);color:#92400e}
 .user-role-tag.user{background:var(--primary-light);color:var(--primary)}
+.user-role-tag.viewer{background:var(--cyan-light);color:var(--cyan)}
 .btn-logout{color:var(--text2);font-size:16px;padding:8px;border-radius:var(--radius-sm);transition:var(--transition)}
 .btn-logout:hover{background:var(--danger-light);color:var(--danger)}
 
@@ -200,6 +201,7 @@ tr.row-expired td:first-child{text-decoration:line-through}
 .role-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
 .role-badge.admin{background:linear-gradient(135deg,#fef3c7,#fde68a);color:#92400e}
 .role-badge.user{background:var(--primary-light);color:var(--primary)}
+.role-badge.viewer{background:var(--cyan-light);color:var(--cyan)}
 
 /* ── EMPTY STATE ── */
 .empty-state{text-align:center;padding:50px 20px;color:var(--text3)}
