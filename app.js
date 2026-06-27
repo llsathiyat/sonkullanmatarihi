@@ -61,12 +61,13 @@ function detectDevice() {
   return 'Bilinmeyen Cihaz';
 }
 
-function addLog(username, action) {
+function addLog(username, action, detail = '') {
   const logs = JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
   const entry = {
     id: uid(),
     username,
-    action,                       // 'login' | 'logout'
+    action,                       // 'login' | 'logout' | 'create' | 'update' | 'delete' | 'image'
+    detail,                       // okunabilir açıklama, örn: "Ülker markasının logosunu değiştirdi"
     time: new Date().toISOString(),
     browser: detectBrowser(),
     device: detectDevice(),
@@ -426,6 +427,8 @@ function applySettings() {
 
 $('settingsAppForm')?.addEventListener('submit', e => {
   e.preventDefault();
+  const oldSettings = db.getObj(K.settings, {});
+  const oldLogo = oldSettings.logo || '';
   const logo = uploaders['appLogoUploader']?.getValue() || '';
   db.set(K.settings, {
     appName:  $('settingAppName').value.trim() || 'ExpiryTrack',
@@ -433,6 +436,8 @@ $('settingsAppForm')?.addEventListener('submit', e => {
     logo,
   });
   applySettings();
+  if (oldLogo !== logo) addLog(SESSION.username, 'image', 'Uygulamanın ana logosunu değiştirdi');
+  addLog(SESSION.username, 'update', 'Sistem ayarlarını (uygulama adı/alt başlık) güncelledi');
   toast(t('settingsSaveSuccess'));
 });
 
@@ -906,6 +911,7 @@ $('addProductForm').addEventListener('submit', e => {
       note: '',
       createdAt: new Date().toISOString() });
     db.set(K.products, products);
+    addLog(SESSION.username, 'create', `"${getStoreName(f.storeId)}" mağazasındaki "${getCatName(f.categoryId)}" kategorisine "${f.name}" ürününü ekledi`);
     btn.classList.remove('loading');
     const ov = $('addSuccessOverlay'); ov.classList.add('show');
     toast(t('addProductSuccess', f.name));
@@ -1080,6 +1086,9 @@ $('editProductForm').addEventListener('submit', e => {
   }
   const products = db.get(K.products);
   const idx = products.findIndex(p => p.id === id); if (idx === -1) return;
+  const oldImage = products[idx].image || '';
+  const newImage = uploaders['editProdImgUploader']?.getValue() ?? oldImage;
+  const imageChanged = newImage !== oldImage;
   products[idx] = { ...products[idx], name,
     storeId:    $('editProdStore').value,
     categoryId: $('editProdCat').value,
@@ -1087,10 +1096,15 @@ $('editProductForm').addEventListener('submit', e => {
     quantity:   +$('editProdQty').value,
     expiry:     $('editProdExpiry').value,
     barcode:    $('editProdBarcode').value.trim(),
-    image:      uploaders['editProdImgUploader']?.getValue() ?? (products[idx].image || ''),
+    image:      newImage,
     note:       products[idx].note || '',
   };
   db.set(K.products, products);
+  const storeName = getStoreName(products[idx].storeId);
+  if (imageChanged) {
+    addLog(SESSION.username, 'image', `"${storeName}" mağazasındaki "${name}" ürününün görselini değiştirdi`);
+  }
+  addLog(SESSION.username, 'update', `"${storeName}" mağazasındaki "${name}" ürününü düzenledi`);
   closeModal('editProductModal');
   renderProductList(); renderDashboard();
   toast(t('editSuccess', name));
@@ -1173,8 +1187,20 @@ $('storeForm').addEventListener('submit', e => {
   const id     = $('storeId').value;
   const logo   = uploaders['storeLogoUploader']?.getValue() || '';
   const data   = { name, desc: $('storeDesc').value.trim(), logo };
-  if (id) { const idx = stores.findIndex(s => s.id === id); stores[idx] = { ...stores[idx], ...data }; db.set(K.stores, stores); toast(t('storeEditSuccess', name)); }
-  else    { stores.push({ id: uid(), ...data }); db.set(K.stores, stores); toast(t('storeAddSuccess', name)); }
+  if (id) {
+    const idx = stores.findIndex(s => s.id === id);
+    const oldLogo = stores[idx].logo || '';
+    stores[idx] = { ...stores[idx], ...data };
+    db.set(K.stores, stores);
+    if (oldLogo !== logo) addLog(SESSION.username, 'image', `"${name}" mağazasının görselini değiştirdi`);
+    addLog(SESSION.username, 'update', `"${name}" mağazasını düzenledi`);
+    toast(t('storeEditSuccess', name));
+  } else {
+    stores.push({ id: uid(), ...data });
+    db.set(K.stores, stores);
+    addLog(SESSION.username, 'create', `"${name}" isimli yeni mağaza ekledi`);
+    toast(t('storeAddSuccess', name));
+  }
   closeModal('storeModal'); renderStores();
 });
 
@@ -1250,8 +1276,21 @@ $('brandForm').addEventListener('submit', e => {
   const id     = $('brandId').value;
   const logo   = uploaders['brandLogoUploader']?.getValue() || '';
   const data   = { name, categoryId: catId, logo };
-  if (id) { const idx = brands.findIndex(b => b.id === id); brands[idx] = { ...brands[idx], ...data }; db.set(K.brands, brands); toast(t('brandEditSuccess', name)); }
-  else    { brands.push({ id: uid(), ...data }); db.set(K.brands, brands); toast(t('brandAddSuccess', name)); }
+  const catName = getCatName(catId);
+  if (id) {
+    const idx = brands.findIndex(b => b.id === id);
+    const oldLogo = brands[idx].logo || '';
+    brands[idx] = { ...brands[idx], ...data };
+    db.set(K.brands, brands);
+    if (oldLogo !== logo) addLog(SESSION.username, 'image', `"${catName}" kategorisindeki "${name}" markasının logosunu değiştirdi`);
+    addLog(SESSION.username, 'update', `"${catName}" kategorisindeki "${name}" markasını düzenledi`);
+    toast(t('brandEditSuccess', name));
+  } else {
+    brands.push({ id: uid(), ...data });
+    db.set(K.brands, brands);
+    addLog(SESSION.username, 'create', `"${catName}" kategorisine "${name}" isimli yeni marka ekledi`);
+    toast(t('brandAddSuccess', name));
+  }
   closeModal('brandModal'); renderBrands($('brandFilterCat').value);
 });
 
@@ -1330,8 +1369,13 @@ window.openEditNoteModal = function(noteId) {
 };
 
 window.deleteNote = function(noteId) {
-  const notes = db.get(K.notes).filter(n => n.id !== noteId);
-  db.set(K.notes, notes);
+  const notes = db.get(K.notes);
+  const n = notes.find(x => x.id === noteId);
+  if (n) {
+    const p = db.get(K.products).find(x => x.id === n.productId);
+    addLog(SESSION.username, 'delete', `"${p ? p.name : 'silinmiş ürün'}" ürününe ait notu sildi`);
+  }
+  db.set(K.notes, notes.filter(n => n.id !== noteId));
   renderProductNotes();
   toast('Not silindi.');
 };
@@ -1349,12 +1393,16 @@ $('saveNoteBtn').addEventListener('click', () => {
     text:      $('editNoteText').value.trim(),
     image:     uploaders['editNoteImgUploader']?.getValue() || '',
   };
+  const p = db.get(K.products).find(x => x.id === prodId);
+  const prodName = p ? p.name : 'bilinmeyen ürün';
 
   if (noteId) {
     const idx = notes.findIndex(n => n.id === noteId);
     if (idx !== -1) notes[idx] = { ...notes[idx], ...data };
+    addLog(SESSION.username, 'update', `"${prodName}" ürününe ait notu güncelledi`);
   } else {
     notes.push({ id: uid(), ...data, createdAt: new Date().toISOString() });
+    addLog(SESSION.username, 'create', `"${prodName}" ürününe yeni not ekledi`);
   }
 
   db.set(K.notes, notes);
@@ -1394,22 +1442,32 @@ function renderActivityLogs() {
     }).join('');
   }
 
-  // ── Alt kısım: Detaylı giriş/çıkış log tablosu ──
+  // ── Alt kısım: Detaylı işlem log tablosu ──
   const tbody = $('logsTableBody'), empty = $('logsEmpty');
   if (!logs.length) { if(tbody) tbody.innerHTML = ''; if(empty) empty.classList.remove('hidden'); return; }
   if(empty) empty.classList.add('hidden');
+
+  const ACTION_BADGES = {
+    login:  '<span class="log-action-badge in"><i class="fas fa-right-to-bracket"></i> Giriş</span>',
+    logout: '<span class="log-action-badge out"><i class="fas fa-right-from-bracket"></i> Çıkış</span>',
+    create: '<span class="log-action-badge create"><i class="fas fa-plus"></i> Ekleme</span>',
+    update: '<span class="log-action-badge update"><i class="fas fa-pen"></i> Düzenleme</span>',
+    delete: '<span class="log-action-badge delete"><i class="fas fa-trash"></i> Silme</span>',
+    image:  '<span class="log-action-badge image"><i class="fas fa-image"></i> Görsel</span>',
+  };
+
   if (tbody) {
-    tbody.innerHTML = logs.slice(0, 300).map(l => {
+    tbody.innerHTML = logs.slice(0, 500).map(l => {
       const d = new Date(l.time);
       const dateStr = d.toLocaleDateString('tr-TR', { day:'2-digit', month:'short', year:'numeric' });
       const timeStr = d.toLocaleTimeString('tr-TR', { hour:'2-digit', minute:'2-digit' });
-      const actionLabel = l.action === 'login'
-        ? '<span class="log-action-badge in"><i class="fas fa-right-to-bracket"></i> Giriş</span>'
-        : '<span class="log-action-badge out"><i class="fas fa-right-from-bracket"></i> Çıkış</span>';
+      const actionLabel = ACTION_BADGES[l.action] || l.action;
+      const detailText = l.detail ? esc(l.detail) : '<span style="color:var(--text3)">—</span>';
       return `<tr>
         <td><strong>${esc(l.username)}</strong></td>
         <td>${actionLabel}</td>
-        <td>${dateStr} · ${timeStr}</td>
+        <td style="max-width:340px;white-space:normal;line-height:1.5">${detailText}</td>
+        <td style="white-space:nowrap">${dateStr} · ${timeStr}</td>
         <td>${esc(l.browser)}</td>
         <td>${esc(l.device)}</td>
       </tr>`;
@@ -1498,8 +1556,19 @@ $('userForm').addEventListener('submit', e => {
   const users = db.get(K.users);
   if (!id && users.find(u => u.username === uname)) { setErr('uUsernameErr', t('userNameExists')); return; }
   const data = { username: uname, password: pass, role, storeId: (role === 'admin' || role === 'viewer') ? null : storeId };
-  if (id) { const idx = users.findIndex(u => u.id === id); users[idx] = { ...users[idx], ...data }; db.set(K.users, users); toast(t('userEditSuccess', uname)); }
-  else    { users.push({ id: uid(), ...data }); db.set(K.users, users); toast(t('userAddSuccess', uname)); }
+  const roleLabel = role === 'admin' ? 'Admin' : role === 'viewer' ? 'Gözlemci' : 'Kullanıcı';
+  if (id) {
+    const idx = users.findIndex(u => u.id === id);
+    users[idx] = { ...users[idx], ...data };
+    db.set(K.users, users);
+    addLog(SESSION.username, 'update', `"${uname}" kullanıcısını düzenledi (rol: ${roleLabel})`);
+    toast(t('userEditSuccess', uname));
+  } else {
+    users.push({ id: uid(), ...data });
+    db.set(K.users, users);
+    addLog(SESSION.username, 'create', `"${uname}" isimli yeni kullanıcı ekledi (rol: ${roleLabel})`);
+    toast(t('userAddSuccess', uname));
+  }
   closeModal('userModal'); renderUsers();
 });
 
@@ -1523,20 +1592,27 @@ $('deleteConfirmBtn').addEventListener('click', () => {
   if (!pendingDelete) return;
   const { type, id } = pendingDelete;
   if (type === 'product') {
+    const p = db.get(K.products).find(x => x.id === id);
+    if (p) addLog(SESSION.username, 'delete', `"${getStoreName(p.storeId)}" mağazasındaki "${getCatName(p.categoryId)}" kategorisinden "${p.name}" ürününü sildi`);
     db.set(K.products, db.get(K.products).filter(p => p.id !== id));
     renderProductList(); renderDashboard(); toast(t('deleteSuccess', ''));
   } else if (type === 'store') {
+    const s = db.get(K.stores).find(x => x.id === id);
+    const affectedCount = db.get(K.products).filter(p => p.storeId === id).length;
+    if (s) addLog(SESSION.username, 'delete', `"${s.name}" mağazasını sildi (içindeki ${affectedCount} ürün de silindi)`);
     db.set(K.products, db.get(K.products).filter(p => p.storeId !== id));
     db.set(K.stores,   db.get(K.stores).filter(s => s.id !== id));
     renderStores(); renderDashboard(); toast(t('storeDeleteSuccess', ''));
   } else if (type === 'brand') {
     const b = db.get(K.brands).find(x => x.id === id);
     if (db.get(K.products).some(p => p.brandId === id)) { toast(t('brandDeleteInUse', b?.name||''), 'error'); closeModal('deleteModal'); return; }
+    if (b) addLog(SESSION.username, 'delete', `"${getCatName(b.categoryId)}" kategorisindeki "${b.name}" markasını sildi`);
     db.set(K.brands, db.get(K.brands).filter(x => x.id !== id));
     renderBrands(); toast(t('brandDeleteSuccess', b?.name||''));
   } else if (type === 'user') {
     const u = db.get(K.users).find(x => x.id === id);
     if (u?.username === SESSION.username) { toast(t('userDeleteSelf'), 'error'); closeModal('deleteModal'); return; }
+    if (u) addLog(SESSION.username, 'delete', `"${u.username}" kullanıcısını sildi (rol: ${u.role === 'admin' ? 'Admin' : u.role === 'viewer' ? 'Gözlemci' : 'Kullanıcı'})`);
     db.set(K.users, db.get(K.users).filter(x => x.id !== id));
     renderUsers(); toast(t('userDeleteSuccess', u?.username||''));
   }
