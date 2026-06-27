@@ -417,25 +417,25 @@
 
 <!-- ADMIN YETKİLİ BİLGİLENDİRME MODAL -->
 <div class="modal-overlay" id="adminWarningModal">
-  <div class="modal" style="max-width:560px">
-    <div class="modal-header" style="border-bottom:2px solid var(--danger)">
-      <h3 style="color:var(--danger)"><i class="fas fa-triangle-exclamation"></i> YETKİLİ KULLANICI BİLGİLENDİRMESİ</h3>
+  <div class="modal admin-warning-modal">
+    <div class="admin-warning-header">
+      <div class="admin-warning-icon"><i class="fas fa-shield-halved"></i></div>
+      <h3>YETKİLİ KULLANICI BİLGİLENDİRMESİ</h3>
     </div>
-    <div class="modal-body" style="max-height:50vh;overflow-y:auto;font-size:13px;line-height:1.7;color:var(--text2)">
+    <div class="admin-warning-body">
       <p><strong>Sayın Yetkili,</strong></p>
       <p>Bu sisteme giriş yapmanızla birlikte gerçekleştirdiğiniz tüm işlemler (giriş kayıtları, veri ekleme, düzenleme, silme ve diğer yönetici işlemleri) güvenlik amacıyla tarih, saat ve kullanıcı bilgileriyle birlikte kayıt altına alınmaktadır.</p>
       <p>Sistem üzerinde yetkiniz dışında gerçekleştirilecek veri silme, kayıt değiştirme, sisteme zarar verme, yetkisiz erişim sağlama veya diğer kötü niyetli işlemler tespit edilmesi halinde elde edilen log kayıtları ve diğer dijital deliller ilgili adli ve idari mercilere sunulacaktır.</p>
       <p>Bu tür eylemler, olayın niteliğine göre Türk Ceza Kanunu ile diğer ilgili mevzuatlar kapsamında hukuki ve cezai sorumluluk doğurabilir. Gerekli görülmesi halinde maddi ve manevi zararların tazmini için yasal süreç başlatılacaktır.</p>
       <p>Sistemi kullanmaya devam ederek yukarıdaki hususları okuduğunuzu, anladığınızı ve kabul ettiğinizi beyan etmiş olursunuz.</p>
     </div>
-    <div style="padding:16px 24px 0;border-top:1px solid var(--border)">
-      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text1)">
-        <input type="checkbox" id="adminWarningCheckbox" style="width:18px;height:18px;margin-top:1px;cursor:pointer">
-        Okudum, kabul ediyorum.
+    <div class="admin-warning-footer">
+      <label class="admin-warning-check">
+        <input type="checkbox" id="adminWarningCheckbox">
+        <span class="admin-warning-checkmark"><i class="fas fa-check"></i></span>
+        <span class="admin-warning-check-text">Okudum, kabul ediyorum.</span>
       </label>
-    </div>
-    <div class="form-actions">
-      <button type="button" class="btn-primary" id="adminWarningAcceptBtn" disabled style="width:100%"><i class="fas fa-check"></i> Devam Et</button>
+      <button type="button" class="btn-primary admin-warning-btn" id="adminWarningAcceptBtn" disabled><i class="fas fa-check"></i> Devam Et</button>
     </div>
   </div>
 </div>
