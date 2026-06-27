@@ -884,52 +884,53 @@ function populateBrandSelect(selId, catId = '', selected = '') {
 // ════════════════════════════════════════
 // BARKOD TARAMA + ÜRÜN BİLGİSİ SORGULAMA
 // ════════════════════════════════════════
-let barcodeScannerInstance = null;
+let zxingReader = null;
+let zxingStream = null;
 
 function openBarcodeScanner() {
   openModal('barcodeScannerModal');
-  $('barcodeScannerStatus').textContent = '';
+  $('barcodeScannerStatus').textContent = 'Kamera başlatılıyor...';
   $('barcodeScannerStatus').style.color = '';
 
-  if (typeof Html5Qrcode === 'undefined') {
+  if (typeof ZXing === 'undefined') {
     $('barcodeScannerStatus').textContent = 'Tarayıcı kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edin.';
     $('barcodeScannerStatus').style.color = 'var(--danger)';
     return;
   }
 
-  barcodeScannerInstance = new Html5Qrcode('barcodeScannerReader', {
-    formatsToSupport: [
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.CODE_128,
-      Html5QrcodeSupportedFormats.CODE_39,
-      Html5QrcodeSupportedFormats.QR_CODE,
-    ],
-    verbose: false,
-  });
-  const config = {
-    fps: 10,
-    qrbox: (viewfinderWidth, viewfinderHeight) => {
-      const size = Math.min(viewfinderWidth, viewfinderHeight) * 0.8;
-      return { width: Math.min(viewfinderWidth * 0.9, 320), height: size * 0.45 };
-    },
-    aspectRatio: 1.4,
-  };
+  const videoEl = $('barcodeVideoEl');
+  const hints = new Map();
+  const formats = [
+    ZXing.BarcodeFormat.EAN_13,
+    ZXing.BarcodeFormat.EAN_8,
+    ZXing.BarcodeFormat.UPC_A,
+    ZXing.BarcodeFormat.UPC_E,
+    ZXing.BarcodeFormat.CODE_128,
+    ZXing.BarcodeFormat.CODE_39,
+    ZXing.BarcodeFormat.QR_CODE,
+  ];
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
 
-  barcodeScannerInstance.start(
-    { facingMode: 'environment' },
-    config,
-    (decodedText) => {
-      // Barkod okundu — kamerayı durdur, formu doldur
-      stopBarcodeScanner();
-      closeModal('barcodeScannerModal');
-      $('pBarcode').value = decodedText;
-      lookupProductByBarcode(decodedText);
-    },
-    () => { /* okuma denemesi başarısız — sessizce devam et, sürekli tetiklenir */ }
-  ).catch((err) => {
+  zxingReader = new ZXing.BrowserMultiFormatReader(hints);
+
+  zxingReader.decodeFromConstraints(
+    { video: { facingMode: 'environment' } },
+    videoEl,
+    (result, err) => {
+      if (result) {
+        const decodedText = result.getText();
+        stopBarcodeScanner();
+        closeModal('barcodeScannerModal');
+        $('pBarcode').value = decodedText;
+        lookupProductByBarcode(decodedText);
+      }
+      // err sürekli "bulunamadı" hatası fırlatır taramaya devam ederken — bu normal, görmezden gel
+    }
+  ).then(() => {
+    $('barcodeScannerStatus').textContent = '';
+    zxingStream = videoEl.srcObject;
+  }).catch((err) => {
     $('barcodeScannerStatus').textContent = 'Kameraya erişilemedi. Tarayıcı izinlerini kontrol edin.';
     $('barcodeScannerStatus').style.color = 'var(--danger)';
     console.warn('[Barkod Tarayıcı] Kamera hatası:', err);
@@ -937,11 +938,16 @@ function openBarcodeScanner() {
 }
 
 function stopBarcodeScanner() {
-  if (barcodeScannerInstance) {
-    barcodeScannerInstance.stop().catch(() => {});
-    barcodeScannerInstance.clear().catch(() => {});
-    barcodeScannerInstance = null;
+  if (zxingReader) {
+    try { zxingReader.reset(); } catch (e) {}
+    zxingReader = null;
   }
+  if (zxingStream) {
+    zxingStream.getTracks().forEach(track => track.stop());
+    zxingStream = null;
+  }
+  const videoEl = $('barcodeVideoEl');
+  if (videoEl) videoEl.srcObject = null;
 }
 
 $('scanBarcodeBtn')?.addEventListener('click', openBarcodeScanner);
