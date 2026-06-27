@@ -972,8 +972,11 @@ function showProductListCatGrid() {
   const products = visibleProducts();
   $('productListCatGrid').innerHTML = CATEGORIES.map((cat, i) => {
     const pCount = products.filter(p => p.categoryId === cat.id).length;
+    const iconHtml = cat.image
+      ? `<img src="${esc(cat.image)}" alt="${esc(cat.name)}" class="cat-icon-img">`
+      : `<i class="fas ${cat.icon}"></i>`;
     return `<div class="cat-card" style="animation-delay:${i*0.06}s" onclick="selectProductListCategory('${cat.id}')">
-      <div class="cat-icon-wrap" style="background:${cat.color}22;color:${cat.color}"><i class="fas ${cat.icon}"></i></div>
+      <div class="cat-icon-wrap" style="background:${cat.color}22;color:${cat.color}">${iconHtml}</div>
       <div class="cat-card-name">${esc(cat.name)}</div>
       <div class="cat-card-meta">${t('catProducts', pCount)}</div>
     </div>`;
@@ -1082,8 +1085,11 @@ function renderCategories() {
   $('catCardsGrid').innerHTML = CATEGORIES.map((cat, i) => {
     const pCount = products.filter(p => p.categoryId === cat.id).length;
     const bCount = brands.filter(b => b.categoryId === cat.id).length;
+    const iconHtml = cat.image
+      ? `<img src="${esc(cat.image)}" alt="${esc(cat.name)}" class="cat-icon-img">`
+      : `<i class="fas ${cat.icon}"></i>`;
     return `<div class="cat-card" style="animation-delay:${i*0.06}s" onclick="navigateTo('brands');filterBrandsByCat('${cat.id}')">
-      <div class="cat-icon-wrap" style="background:${cat.color}22;color:${cat.color}"><i class="fas ${cat.icon}"></i></div>
+      <div class="cat-icon-wrap" style="background:${cat.color}22;color:${cat.color}">${iconHtml}</div>
       <div class="cat-card-name">${esc(cat.name)}</div>
       <div class="cat-card-meta">${t('catBrands', bCount)} · ${t('catProducts', pCount)}</div>
     </div>`;
