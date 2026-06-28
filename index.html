@@ -11,9 +11,15 @@
 <body>
 
 <!-- ══════════════ YÜKLENİYOR ══════════════ -->
-<div id="firebaseLoadingOverlay" style="position:fixed;inset:0;background:#0f172a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:99999;color:#fff;font-family:Inter,sans-serif">
-  <i class="fas fa-spinner fa-spin" style="font-size:32px;color:#6366f1"></i>
-  <span style="font-size:14px;color:#94a3b8">Bağlanılıyor...</span>
+<div id="firebaseLoadingOverlay" class="zera-loading-overlay">
+  <div class="zera-loading-ring">
+    <svg viewBox="0 0 64 64">
+      <circle class="zera-ring-track" cx="32" cy="32" r="27"/>
+      <circle class="zera-ring-progress" cx="32" cy="32" r="27"/>
+    </svg>
+    <span class="zera-loading-z">Z</span>
+  </div>
+  <span class="zera-loading-text">Bağlanılıyor...</span>
 </div>
 
 <!-- ══════════════ GİRİŞ ══════════════ -->
