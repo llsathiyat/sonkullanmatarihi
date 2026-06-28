@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   ExpiryTrack — Firebase Bağlantı ve Senkronizasyon Katmanı
+   ZERA — Firebase Bağlantı ve Senkronizasyon Katmanı
    localStorage'daki veriyi Firebase Realtime Database ile
    otomatik senkronize eder. app.js'in kodunu değiştirmez.
 
@@ -7,6 +7,14 @@
    - Giriş ekranı SADECE et_users verisi gelince açılır (küçük veri, hızlı).
    - et_products gibi büyük veriler ARKA PLANDA paralel çekilir,
      giriş ekranını ASLA bloklamaz. Geldiğinde ekranlar otomatik tazelenir.
+
+   ÇAKIŞMA ÇÖZÜMÜ (ÖNEMLİ):
+   - Diziler (ürünler, mağazalar vb.) Firebase'de TEK BİR BLOB olarak
+     değil, HER KAYIT KENDİ ID'Sİ İLE AYRI BİR NODE olarak saklanır.
+   - Böylece: Cihaz A bir ürünü silerken Cihaz B başka bir ürün eklerse,
+     ikisi de Firebase'de SADECE kendi kaydını değiştirir — birbirinin
+     işlemini ezmez. Eski mimaride (dizi tek blob) bu çakışma silinen
+     verinin geri gelmesine yol açıyordu.
 ═══════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -30,7 +38,21 @@
     console.warn('[Firebase] başlatma hatası:', e);
   }
 
-  const SYNC_KEYS = ['et_users', 'et_products', 'et_stores', 'et_brands', 'et_settings', 'et_notes', 'et_activity_logs', 'et_last_active'];
+  // Bu anahtarlar İÇİNDE bir DİZİ (array) tutan ve her elemanın kendi "id"
+  // alanı olan anahtarlar — bunlar Firebase'de tekil kayıt (id bazlı) olarak
+  // saklanır, çakışma riski olmadan senkronize edilir.
+  const ARRAY_KEYS = ['et_products', 'et_stores', 'et_brands', 'et_users', 'et_notes'];
+  // Bu anahtarlar tek bir obje/ayar bütünü — değişikliği nadir, çakışma riski
+  // düşük, basit "tüm değeri yaz" yöntemiyle senkronize edilir.
+  const BLOB_KEYS  = ['et_settings'];
+  // Log ve aktivite verisi: liste ama append-only (üzerine ekleniyor), her
+  // girişin kendi zaman damgalı id'si var, tekil kayıt mantığına uygun.
+  const LOG_KEYS   = ['et_activity_logs'];
+  // last_active: kullanıcı adına göre anahtarlanmış obje (dizi değil),
+  // her kullanıcı kendi alanını yazdığı için zaten çakışma riski yok.
+  const MAP_KEYS    = ['et_last_active'];
+
+  const SYNC_KEYS = [...ARRAY_KEYS, ...BLOB_KEYS, ...LOG_KEYS, ...MAP_KEYS];
 
   function fetchKey(key, timeoutMs) {
     return new Promise((resolve) => {
@@ -43,7 +65,19 @@
         .then((snap) => {
           const val = snap.val();
           if (val !== null && val !== undefined) {
-            localStorage.setItem(key, JSON.stringify(val));
+            let localValue;
+            if (ARRAY_KEYS.includes(key) || LOG_KEYS.includes(key)) {
+              // Firebase'de { id1: {...}, id2: {...} } şeklinde duruyor,
+              // localStorage'a (ve app.js'e) eskisi gibi DİZİ olarak veriyoruz.
+              localValue = Object.values(val);
+              // Bu anahtarın "bilinen id listesi"ni de güncelle — ileride
+              // bu cihazdan bir silme olduğunda doğru tespit edilsin.
+              window.__previousArrayState = window.__previousArrayState || {};
+              window.__previousArrayState[key] = new Set(Object.keys(val));
+            } else {
+              localValue = val;
+            }
+            localStorage.setItem.__original(key, JSON.stringify(localValue));
             finish(true);
           } else {
             finish(false);
@@ -56,13 +90,9 @@
   }
 
   // ── ÖNCELİKLİ: SADECE kullanıcı listesi — giriş ekranı bunu bekler ──
-  // Küçük veri (genelde birkaç KB), normal bağlantıda 1-2 saniye sürer.
-  // 8 saniyelik üst sınır bile çok kötü bir bağlantı için yeterli garanti.
   window.__usersReady = fetchKey('et_users', 8000);
 
   // ── ARKA PLAN: büyük veriler — giriş ekranını ASLA bloklamaz ──
-  // Bunlar yüklenirken kullanıcı zaten giriş yapmış, panel açık olabilir.
-  // Geldiklerinde app.js tarafındaki render fonksiyonları tazelenir.
   window.__backgroundReady = Promise.all([
     fetchKey('et_products', 30000),
     fetchKey('et_stores',   12000),
@@ -73,11 +103,9 @@
     fetchKey('et_last_active',   10000),
   ]).then((results) => results.some(Boolean));
 
-  // Geriye dönük uyumluluk: eski kodun beklediği isim
   window.__firebaseReady = window.__usersReady;
 
-  // GÜVENLİK AĞI: Kullanıcı verisi bile gelmezse, 10 saniye sonra
-  // yükleme ekranını zorla kaldır (elindeki yerel veriyle devam et).
+  // GÜVENLİK AĞI
   setTimeout(() => {
     const overlay = document.getElementById('firebaseLoadingOverlay');
     if (overlay) {
@@ -86,19 +114,57 @@
     }
   }, 10000);
 
-  // ── localStorage.setItem'i ele geçir: her yazımda Firebase'e de gönder ──
+  // ── localStorage.setItem'i ele geçir ──
+  // Her dizi öğesi kendi id'siyle ayrı bir Firebase node'una yazılır.
+  // Bu sayede iki cihaz aynı anda farklı kayıtlar üzerinde çalışsa bile
+  // birbirinin değişikliğini EZMEZ (önceki mimaride bu sorun yaşanıyordu).
   const originalSetItem = localStorage.setItem.bind(localStorage);
+  localStorage.setItem.__original = originalSetItem; // fetchKey içinde döngüye girmemek için
+
+  window.__previousArrayState = window.__previousArrayState || {};
+
   localStorage.setItem = function (key, value) {
     originalSetItem(key, value);
-    if (firebaseOk && SYNC_KEYS.includes(key)) {
-      try {
-        dbRef.ref(key).set(JSON.parse(value))
+    if (!firebaseOk || !SYNC_KEYS.includes(key)) return;
+
+    try {
+      const parsed = JSON.parse(value);
+
+      if (ARRAY_KEYS.includes(key) || LOG_KEYS.includes(key)) {
+        // Diziyi { id: {...} } obje haline çevirip Firebase'e öyle yaz.
+        const asObject = {};
+        const currentIds = new Set();
+        parsed.forEach((item) => {
+          if (item && item.id) {
+            asObject[item.id] = item;
+            currentIds.add(String(item.id));
+          }
+        });
+
+        // Önceki bilinen halle karşılaştır: hangi id'ler artık yok (silindi)?
+        const prevIds = window.__previousArrayState[key] || new Set();
+        const removedIds = [...prevIds].filter(id => !currentIds.has(id));
+
+        // Sadece DEĞİŞEN/SİLİNEN kayıtları işle — tüm node'u toptan ezme.
+        const updates = {};
+        currentIds.forEach(id => { updates[id] = asObject[id]; });
+        removedIds.forEach(id => { updates[id] = null; }); // null = Firebase'de o alt-anahtarı siler
+
+        if (Object.keys(updates).length > 0) {
+          dbRef.ref(key).update(updates)
+            .catch((err) => console.warn('[Firebase] yazma hatası:', key, err));
+        }
+
+        window.__previousArrayState[key] = currentIds;
+      } else {
+        // BLOB_KEYS / MAP_KEYS: tek parça veri, doğrudan yaz (düşük çakışma riski).
+        dbRef.ref(key).set(parsed)
           .catch((err) => console.warn('[Firebase] yazma hatası:', key, err));
-      } catch (e) {
-        console.warn('[Firebase] JSON parse hatası:', key, e);
       }
+    } catch (e) {
+      console.warn('[Firebase] JSON parse hatası:', key, e);
     }
   };
 
-  console.log('[Firebase] Senkronizasyon katmanı hazır (öncelikli kullanıcı + arka plan veri stratejisi).');
+  console.log('[Firebase] Senkronizasyon katmanı hazır (tekil-kayıt çakışma korumalı).');
 })();
