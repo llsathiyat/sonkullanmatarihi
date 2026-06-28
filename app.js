@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   ExpiryTrack v2 — app.js   (STABLE RESTORE)
+   ZERA v2 — app.js   (STABLE RESTORE)
    Multi-level SaaS | Admin + User Roles | Stores | Brands
 ═══════════════════════════════════════════════════════════ */
 'use strict';
@@ -408,7 +408,7 @@ function seedDefaults() {
 
 // ── SETTINGS ──
 function applySettings() {
-  const s = db.getObj(K.settings, { appName: 'ExpiryTrack', tagline: 'Akıllı Son Kullanma Takip Sistemi', logo: '' });
+  const s = db.getObj(K.settings, { appName: 'ZERA', tagline: 'Son Kullanma Takip Sistemi', logo: '' });
   $('loginAppName').textContent = s.appName;
   $('loginTagline').textContent = s.tagline;
   $('loginLogoWrap').innerHTML  = s.logo
@@ -432,7 +432,7 @@ $('settingsAppForm')?.addEventListener('submit', e => {
   const oldLogo = oldSettings.logo || '';
   const logo = uploaders['appLogoUploader']?.getValue() || '';
   db.set(K.settings, {
-    appName:  $('settingAppName').value.trim() || 'ExpiryTrack',
+    appName:  $('settingAppName').value.trim() || 'ZERA',
     tagline:  $('settingTagline').value.trim(),
     logo,
   });

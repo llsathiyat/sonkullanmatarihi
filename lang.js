@@ -1,10 +1,10 @@
 /* ═══════════════════════════════════════════════════════════
-   ExpiryTrack — lang.js  (v2 — Tam Türkçe Sözlük)
+   ZERA — lang.js  (v2 — Tam Türkçe Sözlük)
 ═══════════════════════════════════════════════════════════ */
 const TR = {
   /* ── Uygulama ── */
-  appName:            'ExpiryTrack',
-  appTagline:         'Akıllı Son Kullanma Takip Sistemi',
+  appName:            'ZERA',
+  appTagline:         'Son Kullanma Takip Sistemi',
   save:               'Kaydet',
   cancel:             'İptal',
   delete:             'Sil',
