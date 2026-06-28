@@ -11,18 +11,31 @@
 <body>
 
 <!-- ══════════════ YÜKLENİYOR ══════════════ -->
-<div id="firebaseLoadingOverlay" class="zera-loading-overlay" style="position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:#0a0a0c">
-  <div class="zera-dots-ring" style="position:relative;width:56px;height:56px">
-    <span class="zera-dot" style="--i:0"></span>
-    <span class="zera-dot" style="--i:1"></span>
-    <span class="zera-dot" style="--i:2"></span>
-    <span class="zera-dot" style="--i:3"></span>
-    <span class="zera-dot" style="--i:4"></span>
-    <span class="zera-dot" style="--i:5"></span>
-    <span class="zera-dot" style="--i:6"></span>
-    <span class="zera-dot" style="--i:7"></span>
+<style>
+@keyframes zeraDotPulseInline{
+  0%{opacity:1;background:#dc2626}
+  35%{opacity:.25;background:#3a3a40}
+  100%{opacity:.25;background:#3a3a40}
+}
+.zera-dot-inline{
+  position:absolute;top:50%;left:50%;width:7px;height:7px;
+  border-radius:50%;background:#3a3a40;margin:-3.5px;
+  animation:zeraDotPulseInline 1.2s linear infinite;
+  opacity:.25;
+}
+</style>
+<div id="firebaseLoadingOverlay" style="position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:#0a0a0c">
+  <div style="position:relative;width:56px;height:56px">
+    <span class="zera-dot-inline" style="transform:rotate(0deg) translateX(24px);animation-delay:0s"></span>
+    <span class="zera-dot-inline" style="transform:rotate(45deg) translateX(24px);animation-delay:0.15s"></span>
+    <span class="zera-dot-inline" style="transform:rotate(90deg) translateX(24px);animation-delay:0.3s"></span>
+    <span class="zera-dot-inline" style="transform:rotate(135deg) translateX(24px);animation-delay:0.45s"></span>
+    <span class="zera-dot-inline" style="transform:rotate(180deg) translateX(24px);animation-delay:0.6s"></span>
+    <span class="zera-dot-inline" style="transform:rotate(225deg) translateX(24px);animation-delay:0.75s"></span>
+    <span class="zera-dot-inline" style="transform:rotate(270deg) translateX(24px);animation-delay:0.9s"></span>
+    <span class="zera-dot-inline" style="transform:rotate(315deg) translateX(24px);animation-delay:1.05s"></span>
   </div>
-  <span class="zera-loading-text" style="font-size:13px;color:#6b6b76;letter-spacing:.3px">Bağlanılıyor...</span>
+  <span style="font-size:13px;color:#6b6b76;letter-spacing:.3px;font-family:Inter,sans-serif">Bağlanılıyor...</span>
 </div>
 
 <!-- ══════════════ GİRİŞ ══════════════ -->
