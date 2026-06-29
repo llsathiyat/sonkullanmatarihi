@@ -1950,3 +1950,18 @@ setTimeout(() => {
     if (overlay) overlay.remove();
   }
 }, 8000);
+
+// ════════════════════════════════════════
+// DASHBOARD DUYURU BANNER'I — dokunma/hover ile durdurma
+// (Mevcut dashboard render mantığına dokunulmadı, bağımsız bir katman)
+// ════════════════════════════════════════
+(function setupDashAnnounceBanner() {
+  const el = document.getElementById('dashAnnounce');
+  if (!el) return;
+  const pause  = () => el.classList.add('paused');
+  const resume = () => el.classList.remove('paused');
+  el.addEventListener('touchstart', pause,  { passive: true });
+  el.addEventListener('touchend',   resume, { passive: true });
+  el.addEventListener('mouseenter', pause);
+  el.addEventListener('mouseleave', resume);
+})();

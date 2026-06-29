@@ -140,7 +140,15 @@
 
       <!-- ── GÖSTERGE PANELİ ── -->
       <section class="page active" id="page-dashboard">
-        <div class="page-header"><div class="page-header-text"><h2>Genel Bakış</h2><p>Ürünlerinizin son kullanma durumunu anlık takip edin</p></div></div>
+        <div class="page-header">
+          <div class="page-header-text"><h2>Genel Bakış</h2><p>Ürünlerinizin son kullanma durumunu anlık takip edin</p></div>
+          <div class="dash-announce" id="dashAnnounce">
+            <i class="fas fa-circle-info dash-announce-icon"></i>
+            <div class="dash-announce-track">
+              <span class="dash-announce-text">TETT takibini kolaylaştırmak için ürün notlarını kullanmayı unutmayın.</span>
+            </div>
+          </div>
+        </div>
         <div class="stats-grid cols-7" id="dashStatsGrid">
           <div class="stat-card s-stores"><div class="stat-icon"><i class="fas fa-store"></i></div><div class="stat-info"><span class="stat-label" id="lStores">Toplam Mağaza</span><span class="stat-value" id="sStores">0</span></div></div>
           <div class="stat-card s-cats"><div class="stat-icon"><i class="fas fa-tags"></i></div><div class="stat-info"><span class="stat-label" id="lCats">Kategoriler</span><span class="stat-value" id="sCats">0</span></div></div>
