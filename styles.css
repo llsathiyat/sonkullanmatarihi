@@ -141,6 +141,7 @@ ul{list-style:none}
 .page.active{display:block}
 @keyframes pageIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 .page-header{margin-bottom:24px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.page-header-text{flex:1;min-width:0}
 .page-header-text h2{font-size:24px;font-weight:800;color:var(--text);letter-spacing:-.5px}
 .page-header-text p{color:var(--text2);font-size:14px;margin-top:4px}
 .page-header-actions{display:flex;gap:10px;flex-wrap:wrap}
@@ -592,11 +593,11 @@ select{appearance:none}
 
 /* ── DASHBOARD DUYURU BANNER'I ── */
 .dash-announce{
-  display:flex;align-items:center;gap:10px;
+  display:inline-flex;align-items:center;gap:10px;
   background:var(--surface2);border:1px solid var(--border);
   border-radius:20px;padding:8px 16px;
-  max-width:380px;overflow:hidden;
-  flex-shrink:0;
+  width:fit-content;max-width:380px;overflow:hidden;
+  flex-shrink:0;align-self:flex-start;
 }
 .dash-announce-icon{color:var(--text2);font-size:13px;flex-shrink:0}
 .dash-announce-track{overflow:hidden;position:relative;height:18px;display:flex;align-items:center}
