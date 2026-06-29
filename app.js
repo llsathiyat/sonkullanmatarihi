@@ -428,33 +428,9 @@ function applySettings() {
   }
 }
 
-$('settingsAppForm')?.addEventListener('submit', e => {
-  e.preventDefault();
-  const oldSettings = db.getObj(K.settings, {});
-  const oldLogo = oldSettings.logo || '';
-  const logo = uploaders['appLogoUploader']?.getValue() || '';
-  db.set(K.settings, {
-    appName:  $('settingAppName').value.trim() || 'ZERA',
-    tagline:  $('settingTagline').value.trim(),
-    logo,
-  });
-  applySettings();
-  if (oldLogo !== logo) addLog(SESSION.username, 'image', 'Uygulamanın ana logosunu değiştirdi');
-  addLog(SESSION.username, 'update', 'Sistem ayarlarını (uygulama adı/alt başlık) güncelledi');
-  toast(t('settingsSaveSuccess'));
-});
-
-$('settingsPassForm')?.addEventListener('submit', e => {
-  e.preventDefault();
-  clrErr('settingPassErr');
-  const np = $('settingNewPass').value;
-  if (!np) { setErr('settingPassErr', t('settingsPassErr')); return; }
-  const users = db.get(K.users);
-  const idx   = users.findIndex(u => u.username === SESSION.username);
-  if (idx !== -1) { users[idx].password = np; db.set(K.users, users); }
-  $('settingNewPass').value = '';
-  toast(t('settingsPassSuccess'));
-});
+// NOT: settingsAppForm ve settingsPassForm kaldırıldı (Sistem Ayarları
+// sayfası tamamen kaldırıldı). Şifre değiştirme artık Profil modalında
+// (profilePasswordForm) eski şifre doğrulamalı olarak yapılıyor.
 
 // ════════════════════════════════════════
 // AUTH
@@ -653,7 +629,6 @@ function buildSidebar() {
       { page:'brands',       icon:'fa-certificate',  label: t('navBrands') },
       { page:'productNotes', icon:'fa-note-sticky',  label: 'Ürün Notları' },
       { page:'users',        icon:'fa-users',         label: t('navUsers') },
-      { page:'settings',     icon:'fa-gear',          label: t('navSettings'), badge: t('navAdminOnly') },
     ];
     const divider = document.createElement('div');
     divider.className = 'nav-section-label admin-nav';
@@ -690,11 +665,10 @@ const PAGE_TITLES = {
   stores:       t('pageStores'),
   brands:       t('pageBrands'),
   users:        t('pageUsers'),
-  settings:     t('pageSettings'),
   productNotes: 'Ürün Notları',
   activityLogs: 'Aktivite Logları',
 };
-const ADMIN_PAGES  = ['stores', 'brands', 'users', 'settings', 'productNotes'];
+const ADMIN_PAGES  = ['stores', 'brands', 'users', 'productNotes'];
 const EDITOR_PAGES = ['addProduct']; // viewer bu sayfalara giremez
 
 function navigateTo(pageId) {
@@ -714,12 +688,6 @@ function navigateTo(pageId) {
   if (pageId === 'users')       renderUsers();
   if (pageId === 'productNotes') renderProductNotes();
   if (pageId === 'activityLogs') renderActivityLogs();
-  if (pageId === 'settings') {
-    applySettings();
-    createUploader('appLogoUploader');
-    const s = db.getObj(K.settings, {});
-    uploaders['appLogoUploader']?.setValue(s.logo || '');
-  }
 }
 
 document.addEventListener('click', e => {
@@ -992,6 +960,150 @@ function stopBarcodeScanner() {
   if (videoEl) videoEl.srcObject = null;
   barcodeScanLocked = false;
 }
+
+// ════════════════════════════════════════
+// SKT (SON KULLANMA TARİHİ) TARAMA SİSTEMİ
+// Barkod tarama sisteminden TAMAMEN BAĞIMSIZDIR:
+// - Farklı teknoloji kullanır (Tesseract.js OCR — görüntüden metin okuma),
+//   barkod tarama ZXing ile çalışır, ikisi birbirine hiç bağlı değildir.
+// - Kendi kamera akışını, kendi modalını, kendi durum değişkenlerini kullanır.
+// - Barkod tarama koduna hiçbir satır eklenmedi veya değiştirilmedi.
+// ════════════════════════════════════════
+let sktStream = null;
+let sktScanTimer = null;
+let sktScanLocked = false;
+let sktOcrBusy = false; // bir OCR işlemi sürerken yenisini başlatma (performans)
+
+function openSktScanner() {
+  if (!ensureStoreAndCategorySelected()) return; // aynı ön-koşul: mağaza/kategori seçili olmalı
+
+  sktScanLocked = false;
+  openModal('sktScannerModal');
+  $('sktScannerStatus').textContent = 'Kamera başlatılıyor...';
+  $('sktScannerStatus').style.color = '';
+
+  if (typeof Tesseract === 'undefined') {
+    $('sktScannerStatus').textContent = 'OCR kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edin.';
+    $('sktScannerStatus').style.color = 'var(--danger)';
+    return;
+  }
+
+  const videoEl = $('sktVideoEl');
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+  }).then((stream) => {
+    sktStream = stream;
+    videoEl.srcObject = stream;
+    videoEl.play();
+    $('sktScannerStatus').textContent = 'Tarih aranıyor...';
+    // Her 1.2 saniyede bir kareyi OCR'a gönder — sürekli/anlık tarama yerine
+    // aralıklı tarama tercih edildi, bu sayede performans sorunu yaşanmaz.
+    sktScanTimer = setInterval(() => captureAndReadExpiryDate(videoEl), 1200);
+  }).catch((err) => {
+    $('sktScannerStatus').textContent = 'Kameraya erişilemedi. Tarayıcı izinlerini kontrol edin.';
+    $('sktScannerStatus').style.color = 'var(--danger)';
+    console.warn('[SKT Tarayıcı] Kamera hatası:', err);
+  });
+}
+
+function stopSktScanner() {
+  if (sktScanTimer) { clearInterval(sktScanTimer); sktScanTimer = null; }
+  if (sktStream) {
+    sktStream.getTracks().forEach(track => track.stop());
+    sktStream = null;
+  }
+  const videoEl = $('sktVideoEl');
+  if (videoEl) videoEl.srcObject = null;
+  sktScanLocked = false;
+  sktOcrBusy = false;
+}
+
+function captureAndReadExpiryDate(videoEl) {
+  if (sktScanLocked || sktOcrBusy) return; // zaten bulundu ya da OCR meşgul — tekrar tetiklenmesin
+  if (!videoEl.videoWidth) return; // video henüz hazır değil
+
+  sktOcrBusy = true;
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = videoEl.videoWidth;
+  canvas.height = videoEl.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+
+  Tesseract.recognize(canvas, 'eng', { tessedit_char_whitelist: '0123456789./-TETSKTtetskt ' })
+    .then(({ data: { text } }) => {
+      sktOcrBusy = false;
+      if (sktScanLocked) return;
+
+      const parsedDate = parseExpiryDateFromText(text);
+      if (parsedDate) {
+        sktScanLocked = true;
+        stopSktScanner();
+        closeModal('sktScannerModal');
+        $('pExpiry').value = parsedDate;
+        toast('Son kullanma tarihi otomatik dolduruldu, lütfen kontrol edin.');
+      }
+      // Tarih bulunamazsa: sessizce devam et, timer bir sonraki karede tekrar dener.
+      // Kullanıcıya her karede hata göstermek gürültü yaratır; sadece kamera
+      // kapanırken (kullanıcı vazgeçerse) hiçbir şey bulunamadıysa mesaj gösterilir.
+    })
+    .catch(() => { sktOcrBusy = false; });
+}
+
+// OCR'dan gelen ham metinde tarih kalıplarını arar. Birden fazla yaygın format
+// destekleniyor: GG.AA.YYYY, GG/AA/YYYY, GG-AA-YYYY, YYYY-AA-GG, GG.AA.YY.
+// Belirsiz/parçalı veri durumunda (gün veya ay 12'den büyükse vs. mantıksız
+// değerler) hiçbir şey doldurulmaz — kullanıcı elle girmek zorunda kalır.
+function parseExpiryDateFromText(rawText) {
+  if (!rawText) return null;
+  const text = rawText.replace(/\s+/g, ' ');
+
+  // Olası kalıplar: GG.AA.YYYY veya GG.AA.YY (ayraç . / - olabilir)
+  const patterns = [
+    /\b(\d{2})[.\/\-](\d{2})[.\/\-](\d{4})\b/,  // 12.08.2026
+    /\b(\d{2})[.\/\-](\d{2})[.\/\-](\d{2})\b/,  // 12.08.26
+    /\b(\d{4})[.\/\-](\d{2})[.\/\-](\d{2})\b/,  // 2026-08-12 (YYYY-AA-GG)
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+
+    let day, month, year;
+    if (match[1].length === 4) {
+      // YYYY-AA-GG formatı
+      year = match[1]; month = match[2]; day = match[3];
+    } else {
+      day = match[1]; month = match[2];
+      year = match[3].length === 2 ? `20${match[3]}` : match[3];
+    }
+
+    const d = parseInt(day, 10), m = parseInt(month, 10), y = parseInt(year, 10);
+
+    // Mantıksız değerleri ele: gün 1-31, ay 1-12, yıl gerçekçi bir aralıkta olmalı.
+    // Belirsizse (örn. OCR hatasıyla 99.99.9999 gibi) hiçbir şey doldurulmaz.
+    if (d < 1 || d > 31 || m < 1 || m > 12 || y < 2024 || y > 2099) continue;
+
+    const dd = String(d).padStart(2, '0');
+    const mm = String(m).padStart(2, '0');
+    return `${y}-${mm}-${dd}`; // input[type=date] formatı (YYYY-MM-DD)
+  }
+  return null;
+}
+
+$('scanSktBtn')?.addEventListener('click', openSktScanner);
+
+document.addEventListener('click', e => {
+  const closeBtn = e.target.closest('[data-close="sktScannerModal"]');
+  const overlay  = e.target.closest('#sktScannerModal');
+  if (closeBtn || (overlay && e.target === overlay)) {
+    const hadResult = sktScanLocked;
+    stopSktScanner();
+    if (!hadResult) {
+      toast('Son kullanma tarihi algılanamadı, tekrar deneyin.', 'error');
+    }
+  }
+});
 
 // ── YENİ: Kamera açılmadan önce Mağaza ve Kategori kontrolü ──
 // Bu kontrol, mevcut "Tara" ve "Barkod" butonlarının click event'lerini
