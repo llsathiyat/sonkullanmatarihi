@@ -596,22 +596,22 @@ select{appearance:none}
   display:inline-flex;align-items:center;gap:10px;
   background:var(--surface2);border:1px solid var(--border);
   border-radius:20px;padding:8px 16px;
-  width:fit-content;max-width:min(90vw,520px);overflow:hidden;
-  flex-shrink:1;min-width:0;align-self:flex-start;
+  flex-shrink:1;align-self:flex-start;
 }
 .dash-announce-icon{color:var(--text2);font-size:13px;flex-shrink:0}
-.dash-announce-track{overflow:visible;position:relative;height:18px;display:flex;align-items:center;width:max-content}
+.dash-announce-track{position:relative;display:flex;align-items:center}
 .dash-announce-text{
   font-size:12.5px;font-weight:600;color:var(--text2);white-space:nowrap;
   animation:dashAnnounceFade 6s ease-in-out infinite;
 }
 .dash-announce.paused .dash-announce-text{animation-play-state:paused}
 @keyframes dashAnnounceFade{
-  0%{opacity:0;transform:translateY(4px)}
-  8%{opacity:1;transform:translateY(0)}
-  88%{opacity:1;transform:translateY(0)}
-  100%{opacity:0;transform:translateY(-4px)}
+  0%{opacity:0}
+  8%{opacity:1}
+  88%{opacity:1}
+  100%{opacity:0}
 }
-@media (max-width:640px){
-  .dash-announce{max-width:100%;width:100%}
+@media (max-width:900px){
+  .dash-announce-text{white-space:normal;font-size:12px}
+  .dash-announce{max-width:100%}
 }
