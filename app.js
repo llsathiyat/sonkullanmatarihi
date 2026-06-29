@@ -977,6 +977,50 @@ function stopBarcodeScanner() {
   barcodeScanLocked = false;
 }
 
+// ── YENİ: Kamera açılmadan önce Mağaza ve Kategori kontrolü ──
+// Bu kontrol, mevcut "Tara" ve "Barkod" butonlarının click event'lerini
+// YAKALAMA (capture) aşamasında önceden çalışır. Eğer mağaza/kategori
+// seçili değilse, kamerayı asla açan asıl handler'a event hiç ulaşmaz
+// (stopImmediatePropagation ile durdurulur) — mevcut tarama mantığı
+// bu sayede hiç değiştirilmeden, sadece "öncesine" bir kapı eklendi.
+function ensureStoreAndCategorySelected() {
+  const storeSel = $('pStore');
+  const catSel   = $('pCategory');
+  if (!storeSel || !catSel) return true; // form yoksa (başka sayfa) engelleme
+
+  // Tek mağaza varsa otomatik seç
+  if (!storeSel.value) {
+    const stores = db.get(K.stores);
+    if (stores.length === 1) {
+      storeSel.value = stores[0].id;
+    }
+  }
+
+  if (!storeSel.value) {
+    toast('Lütfen önce bir mağaza seçin.', 'error');
+    setErr('pStoreErr', t('errStoreRequired'));
+    storeSel.focus();
+    return false;
+  }
+  if (!catSel.value) {
+    toast('Lütfen önce bir kategori seçin.', 'error');
+    setErr('pCatErr', t('errCatRequired'));
+    catSel.focus();
+    return false;
+  }
+  return true;
+}
+
+[$('scanBarcodeBtn'), $('scanBarcodeOnlyBtn')].forEach(btn => {
+  if (!btn) return;
+  btn.addEventListener('click', (e) => {
+    if (!ensureStoreAndCategorySelected()) {
+      e.preventDefault();
+      e.stopImmediatePropagation(); // mevcut openBarcodeScanner çağrısına event ulaşmaz
+    }
+  }, { capture: true }); // capture: true → diğer listener'lardan ÖNCE çalışır
+});
+
 // Mevcut "Tara" butonu — DEĞİŞMEDİ, varsayılan 'full' modunda açılır (otomatik ürün arar)
 $('scanBarcodeBtn')?.addEventListener('click', () => openBarcodeScanner('full'));
 
@@ -999,27 +1043,68 @@ function lookupProductByBarcode(barcode) {
     .then(data => {
       if (data.status === 1 && data.product) {
         const p = data.product;
-        const name = p.product_name_tr || p.product_name || '';
-        const brand = p.brands || '';
+        // Türkçe isim varsa onu kullan, yoksa genel isme düş (mevcut davranış aynen korunuyor)
+        const name = (p.product_name_tr || p.product_name || '').trim();
+        const brandRaw = (p.brands || '').trim();
         const imageUrl = p.image_front_url || p.image_url || '';
 
+        // MEVCUT DAVRANIŞ — DEĞİŞMEDİ: kullanıcı zaten isim yazmışsa üzerine yazma
         if (name && !$('pName').value.trim()) {
-          $('pName').value = brand ? `${name} (${brand})` : name;
+          $('pName').value = name;
         }
 
+        // MEVCUT DAVRANIŞ — DEĞİŞMEDİ: görsel varsa indir ve ata
         if (imageUrl) {
           fetchAndSetProductImage(imageUrl);
         }
 
-        if (msg) { msg.textContent = `✓ Ürün bulundu: ${name || 'isimsiz'}`; msg.style.color = '#16a34a'; }
-        toast('Ürün bilgisi otomatik dolduruldu, lütfen kontrol edin.');
+        // YENİ: Marka eşleştirme — mevcut Marka listesinde ada göre (büyük/küçük
+        // harf ve baştaki/sondaki boşluklar gözardı edilerek) eşleşme aranır.
+        const brandResult = matchBrandByName(brandRaw, $('pCategory').value);
+
+        if (brandResult.status === 'matched') {
+          if (!$('pBrand').value) $('pBrand').value = brandResult.brandId;
+          if (msg) { msg.textContent = `✓ Ürün bulundu: ${name || 'isimsiz'} — Marka: ${brandResult.brandName}`; msg.style.color = '#16a34a'; }
+          toast('Ürün bilgisi otomatik dolduruldu, lütfen kontrol edin.');
+        } else if (brandResult.status === 'not_found') {
+          if (msg) { msg.textContent = `"${brandRaw}" markası sistemde kayıtlı değil. Lütfen önce markayı ekleyin, sonra barkodu tekrar okutun.`; msg.style.color = 'var(--danger)'; }
+          toast(`"${brandRaw}" markası bulunamadı. Önce markayı ekleyin, barkod ve görsel korundu.`, 'error');
+        } else { // 'no_brand_info' — Open Food Facts marka bilgisi döndürmedi
+          if (msg) { msg.textContent = `✓ Ürün bulundu: ${name || 'isimsiz'} — Marka bilgisi tespit edilemedi, lütfen elle seçin.`; msg.style.color = '#16a34a'; }
+          toast('Ürün bilgisi dolduruldu. Marka bilgisi bulunamadı, lütfen elle seçin.');
+        }
       } else {
+        // MEVCUT DAVRANIŞ — DEĞİŞMEDİ
         if (msg) { msg.textContent = 'Bu barkod için ürün bilgisi bulunamadı, manuel girebilirsiniz.'; msg.style.color = 'var(--text3)'; }
       }
     })
     .catch(() => {
       if (msg) { msg.textContent = 'Ürün bilgisi sorgulanamadı (bağlantı hatası).'; msg.style.color = 'var(--danger)'; }
     });
+}
+
+// YENİ: Open Food Facts'tan gelen marka adını mevcut Marka listesiyle eşleştirir.
+// Eşleştirme büyük/küçük harf ve fazladan boşluklara duyarsız çalışır.
+// Yeni marka OTOMATİK OLUŞTURULMAZ — talimat gereği sadece mevcut markalar aranır.
+function matchBrandByName(brandRaw, catId) {
+  if (!brandRaw) return { status: 'no_brand_info' };
+
+  // Open Food Facts birden fazla markayı virgülle ayırarak döndürebilir,
+  // ilk markayı esas alıyoruz (genelde ana marka önce gelir).
+  const firstBrand = brandRaw.split(',')[0].trim();
+  const normalize = (s) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  const target = normalize(firstBrand);
+
+  const allBrands = db.get(K.brands);
+  // Önce seçili kategori içinde ara (daha isabetli), bulunamazsa tüm markalarda ara.
+  const inCategory = catId ? allBrands.filter(b => b.categoryId === catId) : [];
+  const searchPool = inCategory.length ? inCategory : allBrands;
+
+  const found = searchPool.find(b => normalize(b.name) === target)
+             || allBrands.find(b => normalize(b.name) === target);
+
+  if (found) return { status: 'matched', brandId: found.id, brandName: found.name };
+  return { status: 'not_found', searchedName: firstBrand };
 }
 
 function fetchAndSetProductImage(imageUrl) {
